@@ -1,5 +1,3 @@
-Great idea! A well-structured `README.md` file will help users understand your UltraModBot project, its purpose, installation process, and usage. Here's a basic template you can start with:
-
 ```md
 # UltraModBot
 
