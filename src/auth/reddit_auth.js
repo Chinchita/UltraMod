@@ -4,7 +4,7 @@ require('dotenv').config();
 class RedditAuth {
     constructor() {
         this.reddit = new Snoowrap({
-            userAgent: 'UltraModBot/1.0.0 by /u/YourUsername',
+            userAgent: 'UltraModBot/1.0.0 by /u/UltraModBot',
             clientId: process.env.REDDIT_CLIENT_ID,
             clientSecret: process.env.REDDIT_CLIENT_SECRET,
             username: process.env.REDDIT_USERNAME,
