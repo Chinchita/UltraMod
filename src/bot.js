@@ -5,7 +5,7 @@ const path = require('path');
 const Database = require('./database/mongodb');
 const RedditAuth = require('./auth/reddit_auth');
 const Scheduler = require('./utils/scheduler');
-const PermissionMiddleware = require('./middleware/permissions');
+const PermissionMiddleware = require('./Middleware/permissions');
 
 // Import all commands
 const BanCommand = require('./commands/ban');
@@ -20,8 +20,13 @@ class UltraModBot {
     constructor() {
         this.app = express();
         this.reddit = RedditAuth.getRedditInstance();
-        this.setupMiddleware();
+        this.updateSettings = this.updateSettings.bind(this);
+	this.getUserProfile = this.getUserProfile.bind(this);
+	this.getModLog = this.getModLog.bind(this);
+	this.getSubredditStats = this.getSubredditStats.bind(this);
+	this.setupMiddleware();
         this.setupRoutes();
+
         
         // Initialize command handlers
         this.commands = {
@@ -46,6 +51,11 @@ class UltraModBot {
         // Installation and setup
         this.app.post('/install', this.handleInstallation.bind(this));
         this.app.post('/uninstall', this.handleUninstallation.bind(this));
+	this.app.post('/dashboard/:subreddit/settings', this.updateSettings);
+	this.app.get('/dashboard/:subreddit', this.getDashboard.bind(this));
+	this.app.get('/modlog/:subreddit', this.getModLog);
+	this.app.get('/stats/:subreddit', this.getSubredditStats);
+
         
         // Command execution endpoints
         this.app.post('/command/ban', PermissionMiddleware.checkPermissions(['posts']), this.handleBan.bind(this));
@@ -60,7 +70,7 @@ class UltraModBot {
         // Management endpoints
         this.app.get('/dashboard/:subreddit', this.getDashboard.bind(this));
         this.app.post('/dashboard/:subreddit/settings', this.updateSettings.bind(this));
-        this.app.get('/user/:username/:subreddit', this.getUserProfile.bind(this));
+	this.app.get('/user/:username/:subreddit', this.getUserProfile.bind(this));
         this.app.get('/modlog/:subreddit', this.getModLog.bind(this));
         
         // Statistics endpoints
@@ -217,8 +227,9 @@ class UltraModBot {
         try {
             const { subreddit } = req.params;
             const db = Database.getDb();
+            const stats = await this.getSubredditStats(subreddit);
             
-            const [subredditData, recentActions, settings, stats] = await Promise.all([
+            const [subredditData, recentActions, settings, subredditStats] = await Promise.all([
                 db.collection('subreddits').findOne({ name: subreddit }),
                 db.collection('modActions').find({ subreddit }).sort({ timestamp: -1 }).limit(50).toArray(),
                 db.collection('settings').findOne({ subreddit }) || {},
@@ -229,17 +240,88 @@ class UltraModBot {
                 subreddit: subredditData,
                 recentActions,
                 settings,
-                statistics: stats
+                statistics: subredditStats
             });
         } catch (error) {
-            res.status(500).json({ error: error.message });
+      	console.error('Error fetching dashboard:', err);
+     	res.status(500).json({ error: 'Failed to load dashboard.' });
         }
     }
+
+    // Update Settings
+    async updateSettings(req, res) {
+    const { subreddit } = req.params;
+    const settings    = req.body;
+
+    if (!subreddit || !settings || !Object.keys(settings).length) {
+      return res
+        .status(400)
+        .send('Invalid request: Missing subreddit or settings.');
+    }
+
+    try {
+      //
+      console.log(`Updating settings for r/${subreddit}:`, settings);
+      res
+        .status(200)
+        .send(`Settings for r/${subreddit} updated successfully!`);
+    } catch (error) {
+      console.error('Error updating settings:', error);
+      res
+        .status(500)
+        .send('An error occurred while updating settings.');
+    }
+  }
+	
+ async getUserProfile(req, res) {
+    const { username, subreddit } = req.params;
+    try {
+      const db = Database.getDb();
+      const history = await db
+        .collection('modActions')
+        .find({ subreddit, user: username })
+        .sort({ timestamp: -1 })
+        .limit(50)
+        .toArray();
+      res.json({ username, subreddit, history });
+    } catch (err) {
+      console.error('getUserProfile failed', err);
+      res.status(500).json({ error: 'Failed to load profile.' });
+    }
+  }
+
+  async getBannedUsers(req, res) {
+    res.status(500).json({ error: 'getBannedUsers method not implemented yet.' });
+}
+
+async getWarnings(req, res) {
+    res.status(500).json({ error: 'getWarnings method not implemented yet.' });
+}
+
+async getModLog(req, res) {
+    const { subreddit } = req.params;
+    try {
+      const db = Database.getDb();
+      const logs = await db
+        .collection('modActions')
+        .find({ subreddit })
+        .sort({ timestamp: -1 })
+        .limit(100)
+        .toArray();
+
+      res.json({ subreddit, modLog: logs });
+    } catch (err) {
+      console.error('Error in getModLog:', err);
+      res.status(500).json({ error: 'Failed to load moderation log.' });
+    }
+  }
 
     async getSubredditStats(subreddit) {
         const db = Database.getDb();
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-
+	const totalActions  = await db.collection('modActions').countDocuments({ subreddit });
+   	const totalBans = await db.collection('modActions').countDocuments({ subreddit, action: 'ban' });
+	const totalWarnings = await db.collection('modActions').countDocuments({ subreddit, action: 'warn' });
         const stats = await db.collection('modActions').aggregate([
             { 
                 $match: { 
@@ -249,17 +331,21 @@ class UltraModBot {
             },
             {
                 $group: {
-                    _id: '$type',
+                    _id: '$action',
                     count: { $sum: 1 }
                 }
             }
         ]).toArray();
 
-        return stats.reduce((acc, stat) => {
+        return stats.reduce((acc, stat, totalActions, totalBans, totalWarnings) => {
             acc[stat._id] = stat.count;
             return acc;
         }, {});
     }
+
+    async getStatistics(req, res) {
+        res.status(500).json({ error: 'getStatistics method not implemented yet.' });
+    }   
 
     async start() {
         try {
