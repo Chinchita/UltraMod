@@ -4,7 +4,7 @@
   "description": "Multipurpose Reddit Moderator Bot",
   "main": "src/bot.js",
   "scripts": {
-    "start": "node src/bot.js",
+    "start": "node bot.js",
     "dev": "nodemon src/bot.js"
   },
   "dependencies": {
