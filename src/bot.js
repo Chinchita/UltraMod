@@ -5,7 +5,7 @@ const path = require('path');
 const Database = require('./database/mongodb');
 const RedditAuth = require('./auth/reddit_auth');
 const Scheduler = require('./utils/scheduler');
-const PermissionMiddleware = require('./Middleware/permissions');
+const PermissionMiddleware = require('./middleware/permissions');
 
 // Import all commands
 const BanCommand = require('./commands/ban');
@@ -40,7 +40,7 @@ class UltraModBot {
         };
     }
 
-    setupMiddleware() {
+    setupmiddleware() {
         this.app.use(cors());
         this.app.use(bodyParser.json());
         this.app.use(bodyParser.urlencoded({ extended: true }));
